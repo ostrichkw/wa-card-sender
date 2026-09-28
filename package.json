@@ -1,0 +1,16 @@
+{
+  "name": "wa-card-sender",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "يرسل صورة البطاقة المخصصة (Cloudlift) عبر WhatsApp بعد كل طلب شوبيفاي",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
