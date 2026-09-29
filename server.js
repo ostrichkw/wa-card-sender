@@ -1,13 +1,14 @@
 // server.js
-// يستقبل حدث "إنشاء طلب" من شوبيفاي، يسحب رابط صورة البطاقة المخصصة (Cloudlift)
-// ورقم هاتف العميل، ويرسلها عبر WhatsApp Cloud API كـ "مستند" لتفادي ضغط الصور.
+// Receives Shopify's "order creation" webhook, pulls the customized card
+// image URL (from Cloudlift) and the customer's phone number, and sends
+// the image via WhatsApp Cloud API as a "document" (avoids image compression).
 
 import express from "express";
 import crypto from "crypto";
 
 const app = express();
 
-// نحتاج الـ body الخام (raw) للتحقق من توقيع شوبيفاي (HMAC)
+// We need the raw request body to verify Shopify's HMAC signature.
 app.use(
   express.json({
     verify: (req, res, buf) => {
@@ -17,18 +18,19 @@ app.use(
 );
 
 const {
-  SHOPIFY_WEBHOOK_SECRET, // من شوبيفاي: Settings > Notifications > Webhooks
-  WHATSAPP_TOKEN, // توكن الوصول الدائم من Meta for Developers
-  WHATSAPP_PHONE_NUMBER_ID, // Phone Number ID من نفس اللوحة
-  WHATSAPP_TEMPLATE_NAME, // اسم القالب المعتمد (لازم يكون Header = Document)
+  SHOPIFY_WEBHOOK_SECRET, // From Shopify: Settings > Notifications > Webhooks
+  WHATSAPP_TOKEN, // Permanent access token from Meta for Developers
+  WHATSAPP_PHONE_NUMBER_ID, // Phone Number ID from the same dashboard
+  WHATSAPP_TEMPLATE_NAME, // Approved template name (Header must be Document)
   WHATSAPP_TEMPLATE_LANG = "ar",
-  // اسم خاصية الصورة بالطلب. غالبًا "_preview" حسب توثيق Cloudlift،
-  // تأكد منه بفتح طلب تجريبي عبر Shopify Admin API (Order > line_items > properties)
+  // Name of the order property holding the preview image link.
+  // Usually "_preview" per Cloudlift's docs, but verify via the Shopify
+  // Admin API (Order > line_items > properties) on a real test order.
   PREVIEW_PROPERTY_KEY = "_preview",
   PORT = 3000,
 } = process.env;
 
-// ---------- التحقق من أن الطلب فعلاً جاي من شوبيفاي ----------
+// ---------- Verify the webhook really came from Shopify ----------
 function verifyShopifyWebhook(req) {
   const hmacHeader = req.get("X-Shopify-Hmac-Sha256");
   if (!hmacHeader || !req.rawBody) return false;
@@ -44,30 +46,50 @@ function verifyShopifyWebhook(req) {
       Buffer.from(hmacHeader, "utf8")
     );
   } catch {
-    return false; // أطوال مختلفة = توقيع غير صحيح
+    return false; // different lengths = signature mismatch
   }
 }
 
-// ---------- استخراج البيانات المطلوبة من الطلب ----------
+// ---------- Extract what we need from the order payload ----------
 function extractOrderInfo(order) {
   const phone =
     order.phone || order.customer?.phone || order.shipping_address?.phone;
 
+  const customerName =
+    order.customer?.first_name ||
+    order.shipping_address?.first_name ||
+    order.billing_address?.first_name ||
+    null;
+
+  // Check each property's VALUE (not just its name) so we catch the
+  // Cloudlift link regardless of the exact property key used
+  // (_preview, original, etc.)
   let imageUrl = null;
   for (const item of order.line_items || []) {
-    const prop = (item.properties || []).find(
+    const byKey = (item.properties || []).find(
       (p) => p.name === PREVIEW_PROPERTY_KEY && p.value
     );
+    const byValue = (item.properties || []).find(
+      (p) =>
+        typeof p.value === "string" &&
+        (p.value.includes("cloudlift") || p.value.includes("/uploads/"))
+    );
+    const prop = byKey || byValue;
     if (prop) {
       imageUrl = prop.value;
       break;
     }
   }
 
-  return { phone, imageUrl, orderNumber: order.name || String(order.id) };
+  return {
+    phone,
+    imageUrl,
+    customerName,
+    orderNumber: order.name || String(order.id),
+  };
 }
 
-// ---------- تنسيق رقم الهاتف لصيغة دولية بدون + أو أصفار ----------
+// ---------- Normalize phone to international digits, no + or leading 0 ----------
 function normalizePhone(raw) {
   if (!raw) return null;
   let digits = raw.replace(/[^\d+]/g, "");
@@ -75,8 +97,16 @@ function normalizePhone(raw) {
   return digits;
 }
 
-// ---------- إرسال المستند عبر WhatsApp Cloud API ----------
-async function sendWhatsAppDocument({ to, documentUrl, filename, orderNumber }) {
+// ---------- Send the document via WhatsApp Cloud API ----------
+// Template "order_card_confirmation" has 2 body variables:
+// {{1}} = customer name, {{2}} = order number.
+async function sendWhatsAppDocument({
+  to,
+  documentUrl,
+  filename,
+  orderNumber,
+  customerName,
+}) {
   const url = `https://graph.facebook.com/v20.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
 
   const body = {
@@ -101,7 +131,10 @@ async function sendWhatsAppDocument({ to, documentUrl, filename, orderNumber }) 
         },
         {
           type: "body",
-          parameters: [{ type: "text", text: orderNumber }],
+          parameters: [
+            { type: "text", text: customerName || "customer" },
+            { type: "text", text: orderNumber },
+          ],
         },
       ],
     },
@@ -119,12 +152,12 @@ async function sendWhatsAppDocument({ to, documentUrl, filename, orderNumber }) 
   const data = await res.json();
   if (!res.ok) {
     console.error("WhatsApp API error:", JSON.stringify(data));
-    throw new Error(data?.error?.message || "فشل إرسال رسالة واتساب");
+    throw new Error(data?.error?.message || "Failed to send WhatsApp message");
   }
   return data;
 }
 
-// ---------- نقطة استقبال الويب هوك ----------
+// ---------- Webhook endpoint ----------
 app.post("/webhooks/orders-create", async (req, res) => {
   try {
     if (!verifyShopifyWebhook(req)) {
@@ -132,12 +165,13 @@ app.post("/webhooks/orders-create", async (req, res) => {
     }
 
     const order = req.body;
-    const { phone, imageUrl, orderNumber } = extractOrderInfo(order);
+    const { phone, imageUrl, orderNumber, customerName } =
+      extractOrderInfo(order);
     const normalizedPhone = normalizePhone(phone);
 
     if (!normalizedPhone || !imageUrl) {
       console.warn(
-        `الطلب ${orderNumber}: ناقص رقم هاتف أو رابط صورة، تم التجاوز`
+        `Order ${orderNumber}: missing phone or image link, skipped`
       );
       return res.status(200).send("Skipped - missing data");
     }
@@ -145,11 +179,12 @@ app.post("/webhooks/orders-create", async (req, res) => {
     await sendWhatsAppDocument({
       to: normalizedPhone,
       documentUrl: imageUrl,
-      filename: `بطاقة-${orderNumber}.jpg`,
+      filename: `card-${orderNumber}.jpg`,
       orderNumber,
+      customerName,
     });
 
-    console.log(`تم إرسال البطاقة للطلب ${orderNumber} إلى ${normalizedPhone}`);
+    console.log(`Sent card for order ${orderNumber} to ${normalizedPhone}`);
     res.status(200).send("OK");
   } catch (err) {
     console.error(err);
@@ -157,6 +192,6 @@ app.post("/webhooks/orders-create", async (req, res) => {
   }
 });
 
-app.get("/", (req, res) => res.send("WA card sender running ✅"));
+app.get("/", (req, res) => res.send("WA card sender running"));
 
-app.listen(PORT, () => console.log(`يعمل على المنفذ ${PORT}`));
+app.listen(PORT, () => console.log(`Listening on port ${PORT}`));
