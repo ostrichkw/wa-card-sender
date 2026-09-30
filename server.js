@@ -169,6 +169,22 @@ app.post("/webhooks/orders-create", async (req, res) => {
       extractOrderInfo(order);
     const normalizedPhone = normalizePhone(phone);
 
+    // --- DEBUG: print exactly what we found, to diagnose missing data ---
+    console.log(`--- DEBUG Order ${orderNumber} ---`);
+    console.log("raw phone:", phone);
+    console.log("normalized phone:", normalizedPhone);
+    console.log("imageUrl:", imageUrl);
+    console.log("customerName:", customerName);
+    console.log(
+      "line_items properties:",
+      JSON.stringify(
+        (order.line_items || []).map((li) => li.properties),
+        null,
+        2
+      )
+    );
+    console.log("--- END DEBUG ---");
+
     if (!normalizedPhone || !imageUrl) {
       console.warn(
         `Order ${orderNumber}: missing phone or image link, skipped`
