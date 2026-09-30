@@ -8,6 +8,13 @@ import crypto from "crypto";
 
 const app = express();
 
+// Log EVERY incoming request, no matter what, so we can tell whether
+// requests are reaching this server at all.
+app.use((req, res, next) => {
+  console.log(`>>> Incoming request: ${req.method} ${req.originalUrl}`);
+  next();
+});
+
 // We need the raw request body to verify Shopify's HMAC signature.
 app.use(
   express.json({
@@ -161,8 +168,15 @@ async function sendWhatsAppDocument({
 app.post("/webhooks/orders-create", async (req, res) => {
   try {
     if (!verifyShopifyWebhook(req)) {
+      console.warn(
+        "!!! Signature verification FAILED. Header present:",
+        !!req.get("X-Shopify-Hmac-Sha256"),
+        "rawBody present:",
+        !!req.rawBody
+      );
       return res.status(401).send("Invalid signature");
     }
+    console.log("Signature verified OK.");
 
     const order = req.body;
     const { phone, imageUrl, orderNumber, customerName } =
