@@ -261,4 +261,19 @@ app.get("/debug-templates", async (req, res) => {
   }
 });
 
+// ---------- TEMPORARY DEBUG: list real phone numbers + their exact Phone Number IDs ----------
+app.get("/debug-phones", async (req, res) => {
+  try {
+    const wabaId = process.env.WHATSAPP_WABA_ID || "2113421062944628";
+    const url = `https://graph.facebook.com/v20.0/${wabaId}/phone_numbers?fields=display_phone_number,verified_name,id,quality_rating`;
+    const r = await fetch(url, {
+      headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` },
+    });
+    const data = await r.json();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(PORT, () => console.log(`Listening on port ${PORT}`));
