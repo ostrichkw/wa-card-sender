@@ -189,6 +189,16 @@ app.post("/webhooks/orders-create", async (req, res) => {
     console.log("normalized phone:", normalizedPhone);
     console.log("imageUrl:", imageUrl);
     console.log("customerName:", customerName);
+    console.log("order.phone (top-level):", order.phone);
+    console.log("order.customer:", JSON.stringify(order.customer, null, 2));
+    console.log(
+      "order.shipping_address:",
+      JSON.stringify(order.shipping_address, null, 2)
+    );
+    console.log(
+      "order.billing_address:",
+      JSON.stringify(order.billing_address, null, 2)
+    );
     console.log(
       "line_items properties:",
       JSON.stringify(
