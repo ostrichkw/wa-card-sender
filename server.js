@@ -369,4 +369,40 @@ app.get("/debug-subscribe-app", async (req, res) => {
   }
 });
 
+// ---------- TEMPORARY DEBUG: send the simplest possible approved template ----------
+// (Meta's default "hello_world" template, English, no header/document at all)
+// to isolate whether the issue is the phone/number pairing, or specifically
+// our document template.
+app.get("/debug-send-hello", async (req, res) => {
+  try {
+    const to = req.query.to;
+    if (!to) {
+      return res.status(400).json({ error: "Add ?to=96550733733 to the URL" });
+    }
+    const url = `https://graph.facebook.com/v20.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+    const body = {
+      messaging_product: "whatsapp",
+      to,
+      type: "template",
+      template: {
+        name: "hello_world",
+        language: { code: "en_US" },
+      },
+    };
+    const r = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${WHATSAPP_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    console.log("debug-send-hello response:", JSON.stringify(data, null, 2));
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(PORT, () => console.log(`Listening on port ${PORT}`));
