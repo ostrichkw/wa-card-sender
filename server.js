@@ -249,7 +249,7 @@ app.get("/", (req, res) => res.send("WA card sender running"));
 // ---------- TEMPORARY DEBUG: list real templates + their exact language codes ----------
 app.get("/debug-templates", async (req, res) => {
   try {
-    const wabaId = process.env.WHATSAPP_WABA_ID || "2113421062944628";
+    const wabaId = req.query.waba_id || process.env.WHATSAPP_WABA_ID || "2113421062944628";
     const url = `https://graph.facebook.com/v20.0/${wabaId}/message_templates?fields=name,language,status&limit=100`;
     const r = await fetch(url, {
       headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` },
@@ -271,6 +271,27 @@ app.get("/debug-phones", async (req, res) => {
     });
     const data = await r.json();
     res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---------- TEMPORARY DEBUG: list ALL WhatsApp Business Accounts the token can see ----------
+app.get("/debug-wabas", async (req, res) => {
+  try {
+    const businessId = req.query.business_id || "1438075156048444"; // Ostrich Store 1
+    const urls = [
+      `https://graph.facebook.com/v20.0/${businessId}/owned_whatsapp_business_accounts?fields=id,name`,
+      `https://graph.facebook.com/v20.0/${businessId}/client_whatsapp_business_accounts?fields=id,name`,
+    ];
+    const results = {};
+    for (const url of urls) {
+      const r = await fetch(url, {
+        headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` },
+      });
+      results[url] = await r.json();
+    }
+    res.json(results);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
