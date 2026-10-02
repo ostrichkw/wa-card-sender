@@ -108,6 +108,20 @@ function extractOrderInfo(order) {
   };
 }
 
+// ---------- Get the real file extension from the document URL ----------
+// WhatsApp clients can silently fail to render a "document" message if the
+// filename's extension doesn't match the file's real type (e.g. naming a
+// .png file "card.jpg"). Always use the extension that's actually in the URL.
+function getExtensionFromUrl(url, fallback = "jpg") {
+  try {
+    const pathname = new URL(url).pathname;
+    const match = pathname.match(/\.([a-zA-Z0-9]+)$/);
+    return match ? match[1].toLowerCase() : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 // ---------- Normalize phone to international digits, no + or leading 0 ----------
 function normalizePhone(raw) {
   if (!raw) return null;
@@ -228,10 +242,11 @@ app.post("/webhooks/orders-create", async (req, res) => {
       return res.status(200).send("Skipped - missing data");
     }
 
+    const ext = getExtensionFromUrl(imageUrl);
     const waResult = await sendWhatsAppDocument({
       to: normalizedPhone,
       documentUrl: imageUrl,
-      filename: `card-${orderNumber}.jpg`,
+      filename: `card-${orderNumber}.${ext}`,
       orderNumber,
       customerName,
     });
@@ -420,10 +435,11 @@ app.get("/debug-send-card", async (req, res) => {
       return res.status(400).json({ error: "Add ?to=96550733733 to the URL" });
     }
 
+    const ext = getExtensionFromUrl(documentUrl);
     const result = await sendWhatsAppDocument({
       to,
       documentUrl,
-      filename: `card-${orderNumber}.jpg`,
+      filename: `card-${orderNumber}.${ext}`,
       orderNumber,
       customerName,
     });
