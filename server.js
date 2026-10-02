@@ -59,12 +59,20 @@ function verifyShopifyWebhook(req) {
 
 // ---------- Extract what we need from the order payload ----------
 function extractOrderInfo(order) {
+  // Prefer numbers that already include a country code (longer digit
+  // strings / start with "+"), since address-level phone fields often
+  // store only the local number without it.
+  const phoneCandidates = [
+    order.phone,
+    order.customer?.phone,
+    order.customer?.default_address?.phone,
+    order.shipping_address?.phone,
+    order.billing_address?.phone,
+  ].filter(Boolean);
+
   const phone =
-    order.phone ||
-    order.customer?.phone ||
-    order.shipping_address?.phone ||
-    order.billing_address?.phone ||
-    order.customer?.default_address?.phone;
+    phoneCandidates.find((p) => p.replace(/\D/g, "").length >= 10) ||
+    phoneCandidates[0];
 
   const customerName =
     order.customer?.first_name ||
