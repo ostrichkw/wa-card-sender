@@ -405,4 +405,35 @@ app.get("/debug-send-hello", async (req, res) => {
   }
 });
 
+// ---------- TEMPORARY DEBUG: resend the real card template without a new Shopify order ----------
+// Lets us trigger a fresh send on demand and watch every status webhook
+// event (sent/delivered/read/failed) that follows, without creating a test order.
+app.get("/debug-send-card", async (req, res) => {
+  try {
+    const to = req.query.to;
+    const documentUrl =
+      req.query.url || "https://upload.cloudlift.app/s/tbshera/vbkC56favS.png";
+    const orderNumber = req.query.order || "DEBUG-TEST";
+    const customerName = req.query.name || "تجربة";
+
+    if (!to) {
+      return res.status(400).json({ error: "Add ?to=96550733733 to the URL" });
+    }
+
+    const result = await sendWhatsAppDocument({
+      to,
+      documentUrl,
+      filename: `card-${orderNumber}.jpg`,
+      orderNumber,
+      customerName,
+    });
+
+    console.log("debug-send-card response:", JSON.stringify(result, null, 2));
+    res.json(result);
+  } catch (err) {
+    console.error("debug-send-card error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(PORT, () => console.log(`Listening on port ${PORT}`));
