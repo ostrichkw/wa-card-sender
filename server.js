@@ -60,7 +60,11 @@ function verifyShopifyWebhook(req) {
 // ---------- Extract what we need from the order payload ----------
 function extractOrderInfo(order) {
   const phone =
-    order.phone || order.customer?.phone || order.shipping_address?.phone;
+    order.phone ||
+    order.customer?.phone ||
+    order.shipping_address?.phone ||
+    order.billing_address?.phone ||
+    order.customer?.default_address?.phone;
 
   const customerName =
     order.customer?.first_name ||
