@@ -249,7 +249,7 @@ app.get("/", (req, res) => res.send("WA card sender running"));
 // ---------- TEMPORARY DEBUG: list real templates + their exact language codes ----------
 app.get("/debug-templates", async (req, res) => {
   try {
-    const wabaId = process.env.WHATSAPP_WABA_ID || "1268467406357695";
+    const wabaId = process.env.WHATSAPP_WABA_ID || "2113421062944628";
     const url = `https://graph.facebook.com/v20.0/${wabaId}/message_templates?fields=name,language,status&limit=100`;
     const r = await fetch(url, {
       headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` },
