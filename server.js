@@ -228,7 +228,7 @@ app.post("/webhooks/orders-create", async (req, res) => {
       return res.status(200).send("Skipped - missing data");
     }
 
-    await sendWhatsAppDocument({
+    const waResult = await sendWhatsAppDocument({
       to: normalizedPhone,
       documentUrl: imageUrl,
       filename: `card-${orderNumber}.jpg`,
@@ -237,6 +237,7 @@ app.post("/webhooks/orders-create", async (req, res) => {
     });
 
     console.log(`Sent card for order ${orderNumber} to ${normalizedPhone}`);
+    console.log("WhatsApp API full response:", JSON.stringify(waResult, null, 2));
     res.status(200).send("OK");
   } catch (err) {
     console.error(err);
@@ -245,6 +246,31 @@ app.post("/webhooks/orders-create", async (req, res) => {
 });
 
 app.get("/", (req, res) => res.send("WA card sender running"));
+
+// ---------- TEMPORARY DEBUG: WhatsApp delivery status webhook ----------
+// Set this as the webhook URL in Meta App Dashboard > WhatsApp > Configuration
+// (callback URL: https://wa-card-sender.onrender.com/webhooks/whatsapp-status)
+// and subscribe to the "messages" field, so we can see delivery/failure events
+// (e.g. media download failures) that don't show up in the initial API response.
+const WA_VERIFY_TOKEN = "ostrich-verify-123";
+
+app.get("/webhooks/whatsapp-status", (req, res) => {
+  if (
+    req.query["hub.mode"] === "subscribe" &&
+    req.query["hub.verify_token"] === WA_VERIFY_TOKEN
+  ) {
+    return res.status(200).send(req.query["hub.challenge"]);
+  }
+  res.sendStatus(403);
+});
+
+app.post("/webhooks/whatsapp-status", (req, res) => {
+  console.log(
+    "=== WhatsApp status webhook ===",
+    JSON.stringify(req.body, null, 2)
+  );
+  res.sendStatus(200);
+});
 
 // ---------- TEMPORARY DEBUG: list real templates + their exact language codes ----------
 app.get("/debug-templates", async (req, res) => {
