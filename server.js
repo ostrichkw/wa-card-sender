@@ -323,4 +323,50 @@ app.get("/debug-wabas", async (req, res) => {
   }
 });
 
+// ---------- TEMPORARY DEBUG: check/force the app's webhook subscription on the WABA ----------
+app.get("/debug-subscribed-apps", async (req, res) => {
+  try {
+    const wabaId = req.query.waba_id || "2113421062944628";
+    const url = `https://graph.facebook.com/v20.0/${wabaId}/subscribed_apps`;
+    const r = await fetch(url, {
+      headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` },
+    });
+    const data = await r.json();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/debug-subscribe-app", async (req, res) => {
+  try {
+    const wabaId = req.query.waba_id || "2113421062944628";
+    const url = `https://graph.facebook.com/v20.0/${wabaId}/subscribed_apps`;
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` },
+    });
+    const data = await r.json();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+// Allow triggering the POST above from a plain browser visit too (GET), since
+// the person testing this doesn't have a tool to send POST requests easily.
+app.get("/debug-subscribe-app", async (req, res) => {
+  try {
+    const wabaId = req.query.waba_id || "2113421062944628";
+    const url = `https://graph.facebook.com/v20.0/${wabaId}/subscribed_apps`;
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` },
+    });
+    const data = await r.json();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(PORT, () => console.log(`Listening on port ${PORT}`));
