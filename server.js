@@ -30,6 +30,9 @@ const {
   WHATSAPP_PHONE_NUMBER_ID, // Phone Number ID from the same dashboard
   WHATSAPP_TEMPLATE_NAME, // Approved template name (Header must be Document)
   WHATSAPP_TEMPLATE_LANG = "ar",
+  // "document" (template header = Document) or "image" (template header = Image).
+  // The value MUST match the header format the approved template was created with.
+  WHATSAPP_HEADER_TYPE = "document",
   // Name of the order property holding the preview image link.
   // Usually "_preview" per Cloudlift's docs, but verify via the Shopify
   // Admin API (Order > line_items > properties) on a real test order.
@@ -139,28 +142,35 @@ async function sendWhatsAppDocument({
   filename,
   orderNumber,
   customerName,
+  templateName = WHATSAPP_TEMPLATE_NAME,
+  headerType = WHATSAPP_HEADER_TYPE,
 }) {
   const url = `https://graph.facebook.com/v20.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+
+  // Template headers of type DOCUMENT only officially support PDF files.
+  // A PNG/JPG card should go in a template whose header is IMAGE.
+  const headerParameter =
+    headerType === "image"
+      ? { type: "image", image: { link: documentUrl } }
+      : {
+          type: "document",
+          document: {
+            link: documentUrl,
+            filename: filename || `card-${orderNumber}.jpg`,
+          },
+        };
 
   const body = {
     messaging_product: "whatsapp",
     to,
     type: "template",
     template: {
-      name: WHATSAPP_TEMPLATE_NAME,
+      name: templateName,
       language: { code: WHATSAPP_TEMPLATE_LANG },
       components: [
         {
           type: "header",
-          parameters: [
-            {
-              type: "document",
-              document: {
-                link: documentUrl,
-                filename: filename || `card-${orderNumber}.jpg`,
-              },
-            },
-          ],
+          parameters: [headerParameter],
         },
         {
           type: "body",
@@ -436,12 +446,16 @@ app.get("/debug-send-card", async (req, res) => {
     }
 
     const ext = getExtensionFromUrl(documentUrl);
+    // Optional overrides for testing a new template without touching env vars:
+    //   ?template=order_card_image&header=image
     const result = await sendWhatsAppDocument({
       to,
       documentUrl,
       filename: `card-${orderNumber}.${ext}`,
       orderNumber,
       customerName,
+      templateName: req.query.template || WHATSAPP_TEMPLATE_NAME,
+      headerType: req.query.header || WHATSAPP_HEADER_TYPE,
     });
 
     console.log("debug-send-card response:", JSON.stringify(result, null, 2));
